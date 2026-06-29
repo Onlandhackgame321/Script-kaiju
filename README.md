@@ -1,4 +1,4 @@
--- [[ KAIJU ALPHA - SILENT BEAM FREECAM WITH COMPACT TOGGLE BUTTON ]]
+-- [[ KAIJU ALPHA - ULTIMATE SILENT BEAM FREECAM (NEXIT HUB REPLICATED) ]]
 if game.CoreGui:FindFirstChild("KaijuChainBeamHub") then
     game.CoreGui.KaijuChainBeamHub:Destroy()
 end
@@ -7,7 +7,7 @@ local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
 local ToggleButton = Instance.new("TextButton")
-local CloseOpenButton = Instance.new("TextButton") -- Nút ẩn/hiện GUI chính
+local CloseOpenButton = Instance.new("TextButton")
 local UICorner = Instance.new("UICorner")
 local UICorner2 = Instance.new("UICorner")
 local UICorner3 = Instance.new("UICorner")
@@ -16,12 +16,11 @@ ScreenGui.Name = "KaijuChainBeamHub"
 ScreenGui.Parent = game:GetService("CoreGui")
 ScreenGui.ResetOnSpawn = false
 
--- [[ NÚT BẤM ẨN/HIỆN GUI CHÍNH - NẰM Ở GIỮA TRÊN CÙNG MÀN HÌNH ]]
+-- [[ NÚT BẤM ẨN/HIỆN GUI CHÍNH - GIỮA TRÊN CÙNG MÀN HÌNH ]]
 CloseOpenButton.Name = "CloseOpenButton"
 CloseOpenButton.Parent = ScreenGui
 CloseOpenButton.BackgroundColor3 = Color3.fromRGB(35, 30, 45)
 CloseOpenButton.BackgroundTransparency = 0.2
--- Căn giữa màn hình (0.5), lệch lên sát mép trên (0.01)
 CloseOpenButton.Position = UDim2.new(0.5, -45, 0, 8) 
 CloseOpenButton.Size = UDim2.new(0, 90, 0, 28)
 CloseOpenButton.Font = Enum.Font.SourceSansBold
@@ -73,36 +72,40 @@ CloseOpenButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- [[ LOGIC HỆ THỐNG BẺ HƯỚNG TIA BEAM NGẦM ]]
+-- [[ LOGIC SILENT AIM & CORE BYPASS ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
+local Camera = workspace.CurrentCamera
 
 local isScriptActive = false
 local targetConnection = nil
-local beamConnection = nil
-local MAX_LOCK_DISTANCE = 600
-local SWITCH_TIME = 0.5
 local currentTarget = nil
 local lastSwitchTime = 0
+local SWITCH_TIME = 0.5
+local MAX_LOCK_DISTANCE = 600
 local hitTargets = {}
 
--- SILENT HOOK: Đánh lừa hệ thống Mouse.Hit, giữ Freecam cho người chơi
-local hookMouse
-hookMouse = hookmetamethod(game, "__index", function(self, key)
-    if self == Mouse and isScriptActive and currentTarget and currentTarget:IsA("BasePart") then
-        if key == "Hit" then
-            return currentTarget.CFrame
-        elseif key == "Target" then
-            return currentTarget
+-- TOÀN CỤC HOOK: Bẻ hướng cả Mouse lẫn CFrame Camera ngầm khi game check hướng bắn
+local indexHook
+indexHook = hookmetamethod(game, "__index", function(self, key)
+    if isScriptActive and currentTarget and currentTarget:IsA("BasePart") then
+        -- Đánh lừa hướng trỏ chuột trái
+        if self == Mouse and (key == "Hit" or key == "Target") then
+            if key == "Hit" then return currentTarget.CFrame end
+            if key == "Target" then return currentTarget end
+        end
+        -- Đánh lừa góc nhìn Camera gốc (Game lấy góc này để khè Beam)
+        if self == Camera and key == "CFrame" then
+            return CFrame.lookAt(hookMouse(self, "CFrame").Position, currentTarget.Position)
         end
     end
-    return hookMouse(self, key)
+    return indexHook(self, key)
 end)
 
--- Hàm tìm kiếm mục tiêu gần nhất chưa bị quét qua
+-- Hàm quét tìm đối thủ gần nhất
 local function findNextTarget()
     local myChar = LocalPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -138,7 +141,7 @@ local function findNextTarget()
     return nil, nil
 end
 
--- Vòng lặp tự động chuyển đổi mục tiêu mỗi 0.5 giây
+-- Vòng lặp quét mục tiêu ngầm (Không tác động gì tới Camera/Nhân vật vật lý)
 local function updateTargetLogic()
     local currentTime = os.clock()
     
@@ -158,7 +161,7 @@ local function updateTargetLogic()
     end
 end
 
--- Luồng xả chiêu liên tục (Giữ chuột ảo mượt mà không gây kẹt hay tụt tia)
+-- Cơ chế kích hoạt skill tự động
 local function autoBeamExecution()
     if isScriptActive and currentTarget then
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Two, false, game)
@@ -173,7 +176,7 @@ local function autoBeamExecution()
     end
 end
 
--- Bật/Tắt hệ thống kết nối khi nhấn nút Auto Beam
+-- Trạng thái Bật/Tắt hệ thống
 ToggleButton.MouseButton1Click:Connect(function()
     isScriptActive = not isScriptActive
     
@@ -186,7 +189,8 @@ ToggleButton.MouseButton1Click:Connect(function()
         lastSwitchTime = 0
         
         targetConnection = RunService.Heartbeat:Connect(updateTargetLogic)
-        beamConnection = task.spawn(function()
+        
+        task.spawn(function()
             while isScriptActive do
                 autoBeamExecution()
                 task.wait(0.05)
