@@ -1,4 +1,4 @@
--- [[ KAIJU ALPHA - FINAL OPTIMIZED SKILL SYSTEM FOR DELTA ]]
+-- [[ KAIJU ALPHA - FINAL PERFECT & STABLE SYSTEM FOR DELTA ]]
 if game.CoreGui:FindFirstChild("KaijuChainBeamHub") then
     game.CoreGui.KaijuChainBeamHub:Destroy()
 end
@@ -59,6 +59,19 @@ local currentTarget = nil
 local lastSwitchTime = 0
 local hitTargets = {}
 
+-- GLOBAL MOUSE HOOK: Chạy duy nhất 1 lần để bẻ hướng chuột cực kỳ ổn định
+local hookMouse
+hookMouse = hookmetamethod(game, "__index", function(self, key)
+    if self == Mouse and (key == "Hit" or key == "Target") and isScriptActive and currentTarget then
+        if key == "Hit" then
+            return currentTarget.CFrame
+        elseif key == "Target" then
+            return currentTarget
+        end
+    end
+    return hookMouse(self, key)
+end)
+
 -- Function to find nearby valid targets
 local function findNextTarget()
     local myChar = LocalPlayer.Character
@@ -94,36 +107,23 @@ local function findNextTarget()
     return nil, nil
 end
 
--- Function to cast skill and maintain the beam direction
-local function castKaijuSkillAtTarget(targetPart)
-    if not targetPart then return end
-    
-    -- Bước 1: Trang bị chiêu 2 (Atomic)
+-- Function to cast skill and safely simulate real input
+local function castKaijuSkillAtTarget()
+    -- Step 1: Chọn chiêu thức số 2
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Two, false, game)
     task.wait(0.02)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Two, false, game)
     task.wait(0.03)
     
-    -- Bước 2: Ép hệ thống Game nhận vị trí con trỏ chuột 3D trùng với vị trí đối thủ
-    local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
-    
-    if onScreen then
-        -- Ép tọa độ 3D của chuột trong game chỉ thẳng vào đối thủ
-        local oldHit = Mouse.Target
-        pcall(function()
-            -- Giả lập hành động bấm GIỮ chuột để khè tia liên tục (Hold beam)
-            VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 0)
-            
-            -- Duy trì tia beam trong 0.4 giây trước khi đổi mục tiêu mới
-            task.wait(0.4) 
-            
-            -- Thả chuột ra để kết thúc lượt bắn chiêu đó
-            VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 0)
-        end)
-    end
+    -- Step 2: Nhấn giữ chuột ảo (Bẻ hướng tự động xử lý bởi Hook ở trên)
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+        task.wait(0.4) -- Khè tia liên tục trong 0.4 giây
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+    end)
 end
 
--- Update target logic and lock screen position
+-- Update target logic and lock camera orientation
 local function updateSkillTarget()
     local myChar = LocalPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -131,7 +131,7 @@ local function updateSkillTarget()
     
     local currentTime = os.clock()
     
-    -- Chuyển mục tiêu sau mỗi 0.5 giây
+    -- Switch target every 0.5 seconds
     if not currentTarget or (currentTime - lastSwitchTime >= SWITCH_TIME) or (currentTarget.Parent and currentTarget.Parent:FindFirstChildOfClass("Humanoid") and currentTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0) then
         if currentTarget and currentTarget.Parent then
             local pName = Players:GetPlayerFromCharacter(currentTarget.Parent)
@@ -143,16 +143,14 @@ local function updateSkillTarget()
             currentTarget = nextRoot
             lastSwitchTime = currentTime
             
-            -- Gọi hàm cast chiêu (gửi kèm Part mục tiêu để lấy tọa độ liên tục)
-            task.spawn(function()
-                castKaijuSkillAtTarget(currentTarget)
-            end)
+            -- Chạy xả chiêu trên luồng độc lập không gây khựng màn hình
+            task.spawn(castKaijuSkillAtTarget)
         else
             currentTarget = nil
         end
     end
     
-    -- Luôn giữ hướng nhìn bám sát kẻ địch
+    -- Always lock Camera and Character towards the target
     if currentTarget and currentTarget.Parent then
         local targetPos = currentTarget.Position
         Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
