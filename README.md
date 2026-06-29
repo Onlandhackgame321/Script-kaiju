@@ -1,4 +1,4 @@
--- [[ KAIJU ALPHA - FINAL PERFECT & STABLE SYSTEM FOR DELTA ]]
+-- [[ KAIJU ALPHA - SILENT BEAM FREECAM WITH COMPACT TOGGLE BUTTON ]]
 if game.CoreGui:FindFirstChild("KaijuChainBeamHub") then
     game.CoreGui.KaijuChainBeamHub:Destroy()
 end
@@ -7,17 +7,35 @@ local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
 local ToggleButton = Instance.new("TextButton")
+local CloseOpenButton = Instance.new("TextButton") -- Nút ẩn/hiện GUI chính
 local UICorner = Instance.new("UICorner")
 local UICorner2 = Instance.new("UICorner")
+local UICorner3 = Instance.new("UICorner")
 
 ScreenGui.Name = "KaijuChainBeamHub"
 ScreenGui.Parent = game:GetService("CoreGui")
 ScreenGui.ResetOnSpawn = false
 
+-- [[ NÚT BẤM ẨN/HIỆN GUI CHÍNH - NẰM Ở GIỮA TRÊN CÙNG MÀN HÌNH ]]
+CloseOpenButton.Name = "CloseOpenButton"
+CloseOpenButton.Parent = ScreenGui
+CloseOpenButton.BackgroundColor3 = Color3.fromRGB(35, 30, 45)
+CloseOpenButton.BackgroundTransparency = 0.2
+-- Căn giữa màn hình (0.5), lệch lên sát mép trên (0.01)
+CloseOpenButton.Position = UDim2.new(0.5, -45, 0, 8) 
+CloseOpenButton.Size = UDim2.new(0, 90, 0, 28)
+CloseOpenButton.Font = Enum.Font.SourceSansBold
+CloseOpenButton.Text = "Nexit Hub : ON"
+CloseOpenButton.TextColor3 = Color3.fromRGB(0, 255, 150)
+CloseOpenButton.TextSize = 13
+UICorner3.CornerRadius = UDim.new(0, 6)
+UICorner3.Parent = CloseOpenButton
+
+-- [[ BẢNG MENU CHÍNH ]]
 MainFrame.Name = "MainFrame"
 MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 25, 35)
-MainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.Position = UDim2.new(0.1, 0, 0.15, 0)
 MainFrame.Size = UDim2.new(0, 220, 0, 130)
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -28,7 +46,7 @@ Title.Parent = MainFrame
 Title.BackgroundTransparency = 1
 Title.Size = UDim2.new(1, 0, 0.3, 0)
 Title.Font = Enum.Font.SourceSansBold
-Title.Text = "KAIJU TRUE AIM (0.5s)"
+Title.Text = "KAIJU SILENT BEAM"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 15
 
@@ -38,31 +56,43 @@ ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
 ToggleButton.Position = UDim2.new(0.1, 0, 0.45, 0)
 ToggleButton.Size = UDim2.new(0.8, 0, 0.4, 0)
 ToggleButton.Font = Enum.Font.SourceSansBold
-ToggleButton.Text = "Chain Skill: OFF"
+ToggleButton.Text = "Auto Beam Players: OFF"
 ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.TextSize = 16
+ToggleButton.TextSize = 14
 UICorner2.Parent = ToggleButton
 
--- [[ SKILL CASTING & MOUSE LOCK LOGIC ]]
+-- [[ KẾT NỐI SỰ KIỆN ẨN / HIỆN GUI ]]
+CloseOpenButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+    if MainFrame.Visible then
+        CloseOpenButton.Text = "Nexit Hub : ON"
+        CloseOpenButton.TextColor3 = Color3.fromRGB(0, 255, 150)
+    else
+        CloseOpenButton.Text = "Nexit Hub : OFF"
+        CloseOpenButton.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
+end)
+
+-- [[ LOGIC HỆ THỐNG BẺ HƯỚNG TIA BEAM NGẦM ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
-local Camera = workspace.CurrentCamera
 
 local isScriptActive = false
-local renderConnection = nil
-local MAX_LOCK_DISTANCE = 500
+local targetConnection = nil
+local beamConnection = nil
+local MAX_LOCK_DISTANCE = 600
 local SWITCH_TIME = 0.5
 local currentTarget = nil
 local lastSwitchTime = 0
 local hitTargets = {}
 
--- GLOBAL MOUSE HOOK: Chạy duy nhất 1 lần để bẻ hướng chuột cực kỳ ổn định
+-- SILENT HOOK: Đánh lừa hệ thống Mouse.Hit, giữ Freecam cho người chơi
 local hookMouse
 hookMouse = hookmetamethod(game, "__index", function(self, key)
-    if self == Mouse and (key == "Hit" or key == "Target") and isScriptActive and currentTarget then
+    if self == Mouse and isScriptActive and currentTarget and currentTarget:IsA("BasePart") then
         if key == "Hit" then
             return currentTarget.CFrame
         elseif key == "Target" then
@@ -72,7 +102,7 @@ hookMouse = hookmetamethod(game, "__index", function(self, key)
     return hookMouse(self, key)
 end)
 
--- Function to find nearby valid targets
+-- Hàm tìm kiếm mục tiêu gần nhất chưa bị quét qua
 local function findNextTarget()
     local myChar = LocalPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -84,6 +114,7 @@ local function findNextTarget()
             local enemyChar = player.Character
             local enemyRoot = enemyChar:FindFirstChild("HumanoidRootPart")
             local enemyHumanoid = enemyChar:FindFirstChildOfClass("Humanoid")
+            
             if enemyRoot and enemyHumanoid and enemyHumanoid.Health > 0 then
                 local distance = (enemyRoot.Position - myRoot.Position).Magnitude
                 if distance <= MAX_LOCK_DISTANCE then
@@ -107,31 +138,10 @@ local function findNextTarget()
     return nil, nil
 end
 
--- Function to cast skill and safely simulate real input
-local function castKaijuSkillAtTarget()
-    -- Step 1: Chọn chiêu thức số 2
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Two, false, game)
-    task.wait(0.02)
-    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Two, false, game)
-    task.wait(0.03)
-    
-    -- Step 2: Nhấn giữ chuột ảo (Bẻ hướng tự động xử lý bởi Hook ở trên)
-    pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-        task.wait(0.4) -- Khè tia liên tục trong 0.4 giây
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-    end)
-end
-
--- Update target logic and lock camera orientation
-local function updateSkillTarget()
-    local myChar = LocalPlayer.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return end
-    
+-- Vòng lặp tự động chuyển đổi mục tiêu mỗi 0.5 giây
+local function updateTargetLogic()
     local currentTime = os.clock()
     
-    -- Switch target every 0.5 seconds
     if not currentTarget or (currentTime - lastSwitchTime >= SWITCH_TIME) or (currentTarget.Parent and currentTarget.Parent:FindFirstChildOfClass("Humanoid") and currentTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0) then
         if currentTarget and currentTarget.Parent then
             local pName = Players:GetPlayerFromCharacter(currentTarget.Parent)
@@ -142,43 +152,55 @@ local function updateSkillTarget()
         if nextRoot then
             currentTarget = nextRoot
             lastSwitchTime = currentTime
-            
-            -- Chạy xả chiêu trên luồng độc lập không gây khựng màn hình
-            task.spawn(castKaijuSkillAtTarget)
         else
             currentTarget = nil
         end
     end
-    
-    -- Always lock Camera and Character towards the target
-    if currentTarget and currentTarget.Parent then
-        local targetPos = currentTarget.Position
-        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
-        myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z))
+end
+
+-- Luồng xả chiêu liên tục (Giữ chuột ảo mượt mà không gây kẹt hay tụt tia)
+local function autoBeamExecution()
+    if isScriptActive and currentTarget then
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Two, false, game)
+        task.wait(0.01)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Two, false, game)
+        
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+            task.wait(0.4)
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+        end)
     end
 end
 
--- Toggle System Connection
+-- Bật/Tắt hệ thống kết nối khi nhấn nút Auto Beam
 ToggleButton.MouseButton1Click:Connect(function()
     isScriptActive = not isScriptActive
     
     if isScriptActive then
-        ToggleButton.Text = "Chain Skill: ON"
+        ToggleButton.Text = "Auto Beam Players: ON"
         ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
         
         hitTargets = {}
         currentTarget = nil
         lastSwitchTime = 0
         
-        renderConnection = RunService.RenderStepped:Connect(updateSkillTarget)
+        targetConnection = RunService.Heartbeat:Connect(updateTargetLogic)
+        beamConnection = task.spawn(function()
+            while isScriptActive do
+                autoBeamExecution()
+                task.wait(0.05)
+            end
+        end)
     else
-        ToggleButton.Text = "Chain Skill: OFF"
+        ToggleButton.Text = "Auto Beam Players: OFF"
         ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
         
-        if renderConnection then
-            renderConnection:Disconnect()
-            renderConnection = nil
+        if targetConnection then
+            targetConnection:Disconnect()
+            targetConnection = nil
         end
+        isScriptActive = false
         currentTarget = nil
         hitTargets = {}
     end
@@ -187,9 +209,9 @@ end)
 LocalPlayer.CharacterRemoving:Connect(function()
     if isScriptActive then
         isScriptActive = false
-        ToggleButton.Text = "Chain Skill: OFF"
+        ToggleButton.Text = "Auto Beam Players: OFF"
         ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-        if renderConnection then renderConnection:Disconnect() end
+        if targetConnection then targetConnection:Disconnect() end
         currentTarget = nil
         hitTargets = {}
     end
