@@ -88,22 +88,28 @@ local SWITCH_TIME = 0.5
 local MAX_LOCK_DISTANCE = 600
 local hitTargets = {}
 
--- TOÀN CỤC HOOK: Bẻ hướng cả Mouse lẫn CFrame Camera ngầm khi game check hướng bắn
-local indexHook
-indexHook = hookmetamethod(game, "__index", function(self, key)
+-- SỬA LỖI CHÍ CHÓC: Hook Metatable hệ thống chuẩn xác, bẻ hướng Camera CFrame ngầm
+local rawMT = getrawmetatable(game)
+local oldIndex = rawMT.__index
+setreadonly(rawMT, false)
+
+rawMT.__index = newcclosure(function(self, key)
     if isScriptActive and currentTarget and currentTarget:IsA("BasePart") then
-        -- Đánh lừa hướng trỏ chuột trái
+        -- Ép hướng chuột ngầm
         if self == Mouse and (key == "Hit" or key == "Target") then
             if key == "Hit" then return currentTarget.CFrame end
             if key == "Target" then return currentTarget end
         end
-        -- Đánh lừa góc nhìn Camera gốc (Game lấy góc này để khè Beam)
+        -- Ép hướng Camera ngầm khi game kiểm tra hướng khè Beam
         if self == Camera and key == "CFrame" then
-            return CFrame.lookAt(hookMouse(self, "CFrame").Position, currentTarget.Position)
+            local originalCFrame = oldIndex(self, key)
+            return CFrame.lookAt(originalCFrame.Position, currentTarget.Position)
         end
     end
-    return indexHook(self, key)
+    return oldIndex(self, key)
 end)
+
+setreadonly(rawMT, true)
 
 -- Hàm quét tìm đối thủ gần nhất
 local function findNextTarget()
@@ -141,7 +147,7 @@ local function findNextTarget()
     return nil, nil
 end
 
--- Vòng lặp quét mục tiêu ngầm (Không tác động gì tới Camera/Nhân vật vật lý)
+-- Vòng lặp quét mục tiêu ngầm
 local function updateTargetLogic()
     local currentTime = os.clock()
     
