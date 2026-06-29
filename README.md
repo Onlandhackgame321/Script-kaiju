@@ -1,4 +1,4 @@
--- [[ KAIJU ALPHA - GENUINE CHAIN SKILL SYSTEM FOR DELTA ]]
+-- [[ KAIJU ALPHA - FINAL OPTIMIZED SKILL SYSTEM FOR DELTA ]]
 if game.CoreGui:FindFirstChild("KaijuChainBeamHub") then
     game.CoreGui.KaijuChainBeamHub:Destroy()
 end
@@ -28,7 +28,7 @@ Title.Parent = MainFrame
 Title.BackgroundTransparency = 1
 Title.Size = UDim2.new(1, 0, 0.3, 0)
 Title.Font = Enum.Font.SourceSansBold
-Title.Text = "KAIJU REAL SKILL (0.5s)"
+Title.Text = "KAIJU TRUE AIM (0.5s)"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 15
 
@@ -43,11 +43,12 @@ ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleButton.TextSize = 16
 UICorner2.Parent = ToggleButton
 
--- [[ SKILL CASTING & LOCK TARGET LOGIC ]]
+-- [[ SKILL CASTING & MOUSE LOCK LOGIC ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 
 local isScriptActive = false
@@ -93,21 +94,36 @@ local function findNextTarget()
     return nil, nil
 end
 
--- Function to equip skill '2' and simulate real click/tap to attack
-local function castKaijuSkill()
-    -- Step 1: Equip skill slot 2 (Atomic)
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Two, false, game)
-    task.wait(0.03)
-    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Two, false, game)
+-- Function to cast skill and maintain the beam direction
+local function castKaijuSkillAtTarget(targetPart)
+    if not targetPart then return end
     
-    -- Step 2: Simulate real mouse click (tap screen) to trigger server-side attack
-    task.wait(0.05)
-    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0) -- Mouse down
+    -- Bước 1: Trang bị chiêu 2 (Atomic)
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Two, false, game)
+    task.wait(0.02)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Two, false, game)
     task.wait(0.03)
-    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0) -- Mouse up
+    
+    -- Bước 2: Ép hệ thống Game nhận vị trí con trỏ chuột 3D trùng với vị trí đối thủ
+    local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
+    
+    if onScreen then
+        -- Ép tọa độ 3D của chuột trong game chỉ thẳng vào đối thủ
+        local oldHit = Mouse.Target
+        pcall(function()
+            -- Giả lập hành động bấm GIỮ chuột để khè tia liên tục (Hold beam)
+            VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 0)
+            
+            -- Duy trì tia beam trong 0.4 giây trước khi đổi mục tiêu mới
+            task.wait(0.4) 
+            
+            -- Thả chuột ra để kết thúc lượt bắn chiêu đó
+            VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 0)
+        end)
+    end
 end
 
--- Update character alignment and camera focus on target
+-- Update target logic and lock screen position
 local function updateSkillTarget()
     local myChar = LocalPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -115,7 +131,7 @@ local function updateSkillTarget()
     
     local currentTime = os.clock()
     
-    -- Switch target every 0.5 seconds
+    -- Chuyển mục tiêu sau mỗi 0.5 giây
     if not currentTarget or (currentTime - lastSwitchTime >= SWITCH_TIME) or (currentTarget.Parent and currentTarget.Parent:FindFirstChildOfClass("Humanoid") and currentTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0) then
         if currentTarget and currentTarget.Parent then
             local pName = Players:GetPlayerFromCharacter(currentTarget.Parent)
@@ -127,21 +143,19 @@ local function updateSkillTarget()
             currentTarget = nextRoot
             lastSwitchTime = currentTime
             
-            -- Instantly cast skill upon locking new target
-            castKaijuSkill()
+            -- Gọi hàm cast chiêu (gửi kèm Part mục tiêu để lấy tọa độ liên tục)
+            task.spawn(function()
+                castKaijuSkillAtTarget(currentTarget)
+            end)
         else
             currentTarget = nil
         end
     end
     
-    -- Force camera and character to look directly at the target
+    -- Luôn giữ hướng nhìn bám sát kẻ địch
     if currentTarget and currentTarget.Parent then
         local targetPos = currentTarget.Position
-        
-        -- Rotate Camera toward target
         Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
-        
-        -- Rotate Character toward target
         myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z))
     end
 end
